@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import useProjectStore from '../store/projectStore';
 import { statusGlow } from '../utils/colorTheme';
+import { PLANETS } from '../utils/solarSystem';
 
 const STATUS_OPTIONS = ['active', 'paused', 'complete'];
 
@@ -86,6 +87,17 @@ export default function ProjectPanel() {
                                 updateProject(project.id, { description: e.target.value })
                             }
                         />
+
+                        <div className="mb-4">
+                            <label className="text-xs text-slate-400 uppercase tracking-wider mb-2 block">Planet</label>
+                            <select
+                                className="input-cosmic"
+                                value={project.planetKey || PLANETS[0].key}
+                                onChange={(event) => updateProject(project.id, { planetKey: event.target.value })}
+                            >
+                                {PLANETS.map((planet) => <option key={planet.key} value={planet.key}>{planet.name}</option>)}
+                            </select>
+                        </div>
 
                         {/* Status toggle */}
                         <div className="mb-4">

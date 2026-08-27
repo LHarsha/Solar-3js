@@ -4,7 +4,7 @@ varying vec2 vUv;
 varying vec3 vNormal;
 varying vec3 vPosition;
 
-// Noise helpers (compact versions)
+// Noise helpers
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 permute(vec4 x) { return mod289(((x * 34.0) + 1.0) * x); }
@@ -50,33 +50,46 @@ float snoise(vec3 v) {
   return 42.0 * dot(m*m, vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
 }
 
-void main() {
-  vec3 pos = vPosition * 1.5;
+// FBM — 4 octaves for richer surface detail
+float fbm(vec3 p) {
+  float f = 0.0;
+  float amp = 0.5;
+  float freq = 1.0;
+  for (int i = 0; i < 4; i++) {
+    f += amp * snoise(p * freq);
+    freq *= 2.0;
+    amp *= 0.5;
+  }
+  return f;
+}
 
-  // Multi-layer plasma noise
-  float n1 = snoise(pos + vec3(uTime * 0.15, 0.0, 0.0));
-  float n2 = snoise(pos * 2.0 - vec3(0.0, uTime * 0.1, 0.0));
-  float n3 = snoise(pos * 4.0 + vec3(0.0, 0.0, uTime * 0.2));
+void main() {
+  vec3 pos = vPosition * 0.8;
+
+  // Multi-layer FBM plasma noise with animated offsets
+  float n1 = fbm(pos + vec3(uTime * 0.12, 0.0, 0.0));
+  float n2 = fbm(pos * 1.5 - vec3(0.0, uTime * 0.08, 0.0));
+  float n3 = snoise(pos * 3.0 + vec3(0.0, 0.0, uTime * 0.15));
   float noise = (n1 + n2 * 0.5 + n3 * 0.25) / 1.75;
   noise = noise * 0.5 + 0.5;
 
-  // Plasma color ramp: dark orange → bright yellow → white hot
-  vec3 col1 = vec3(0.8, 0.2, 0.0);   // deep orange
-  vec3 col2 = vec3(1.0, 0.6, 0.0);   // bright orange
-  vec3 col3 = vec3(1.0, 0.9, 0.4);   // yellow
-  vec3 col4 = vec3(1.0, 1.0, 0.95);  // white hot
+  // Plasma color ramp: dark orange → bright orange → yellow → white hot
+  vec3 col1 = vec3(0.8, 0.15, 0.0);   // deep orange-red
+  vec3 col2 = vec3(1.0, 0.5, 0.0);    // bright orange
+  vec3 col3 = vec3(1.0, 0.85, 0.3);   // yellow
+  vec3 col4 = vec3(1.0, 1.0, 0.92);   // white hot
 
   vec3 color;
-  if (noise < 0.33) {
-    color = mix(col1, col2, noise / 0.33);
-  } else if (noise < 0.66) {
-    color = mix(col2, col3, (noise - 0.33) / 0.33);
+  if (noise < 0.3) {
+    color = mix(col1, col2, noise / 0.3);
+  } else if (noise < 0.6) {
+    color = mix(col2, col3, (noise - 0.3) / 0.3);
   } else {
-    color = mix(col3, col4, (noise - 0.66) / 0.34);
+    color = mix(col3, col4, (noise - 0.6) / 0.4);
   }
 
-  // Add emissive brightness
-  color *= 1.3;
+  // Boost emissive brightness — drives bloom
+  color *= 1.6;
 
   gl_FragColor = vec4(color, 1.0);
 }

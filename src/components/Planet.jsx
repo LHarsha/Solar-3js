@@ -1,174 +1,97 @@
-import { useRef, useMemo, useState } from 'react';
-import { useFrame, extend } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { Html, useTexture } from '@react-three/drei';
 import * as THREE from 'three';
-import { getOrbitPosition, getAntiGravityDrift } from '../utils/orbitMath';
-import { generatePlanetColor, hslToHex, statusGlow } from '../utils/colorTheme';
+import { getOrbitPosition } from '../utils/orbitMath';
+import { getDisplayOrbitRadius, getDisplayPlanetRadius, getOrbitalPeriodSeconds } from '../utils/solarSystem';
 import useProjectStore from '../store/projectStore';
-import planetVertexShader from '../shaders/planet.vert';
-import planetFragmentShader from '../shaders/planet.frag';
-import atmosphereFragmentShader from '../shaders/atmosphere.frag';
+import Moon from './Moon';
 
-class PlanetMaterial extends THREE.ShaderMaterial {
-    constructor() {
-        super({
-            vertexShader: planetVertexShader,
-            fragmentShader: planetFragmentShader,
-            uniforms: {
-                uTime: { value: 0 },
-                uColor1: { value: new THREE.Color('#4488ff') },
-                uColor2: { value: new THREE.Color('#2244aa') },
-                uSelected: { value: 0 },
-            },
-        });
-    }
-}
+const ATLAS_COLUMNS = 2;
+const ATLAS_ROWS = 4;
 
-class AtmosphereMaterial extends THREE.ShaderMaterial {
-    constructor() {
-        super({
-            vertexShader: planetVertexShader,
-            fragmentShader: atmosphereFragmentShader,
-            uniforms: {
-                uAtmosphereColor: { value: new THREE.Color('#6688ff') },
-                uTime: { value: 0 },
-            },
-            transparent: true,
-            side: THREE.BackSide,
-            depthWrite: false,
-        });
-    }
-}
-
-extend({ PlanetMaterial, AtmosphereMaterial });
-
-export default function Planet({ project, onClick }) {
+export default function Planet({ planet, project, onClick, index = 0 }) {
     const groupRef = useRef();
-    const planetMatRef = useRef();
-    const atmosMatRef = useRef();
     const [hovered, setHovered] = useState(false);
-
+    const timeAccum = useRef(0);
+    const atlas = useTexture('/textures/planets-atlas.png');
     const selectedId = useProjectStore((s) => s.selectedId);
-    const orbitsPaused = useProjectStore((s) => s.orbitsPaused);
-    const isSelected = selectedId === project.id;
+    const hoveredPlanetKey = useProjectStore((s) => s.hoveredPlanetKey);
+    const setHoveredPlanet = useProjectStore((s) => s.setHoveredPlanet);
+    const clearHoveredPlanet = useProjectStore((s) => s.clearHoveredPlanet);
+    const isSelected = project && selectedId === project.id;
+    const radius = getDisplayPlanetRadius(planet);
+    const orbitRadius = getDisplayOrbitRadius(planet);
+    const orbitPeriod = getOrbitalPeriodSeconds(planet);
+    const tilt = planet.inclination * (Math.PI / 180);
 
-    const palette = useMemo(() => generatePlanetColor(project.color), [project.color]);
-    const glowColor = useMemo(() => statusGlow(project.status), [project.status]);
+    const surfaceTexture = useMemo(() => {
+        const texture = atlas.clone();
+        const column = planet.atlasIndex % ATLAS_COLUMNS;
+        const row = Math.floor(planet.atlasIndex / ATLAS_COLUMNS);
+        texture.repeat.set(1 / ATLAS_COLUMNS, 1 / ATLAS_ROWS);
+        texture.offset.set(column / ATLAS_COLUMNS, 1 - (row + 1) / ATLAS_ROWS);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.needsUpdate = true;
+        return texture;
+    }, [atlas, planet]);
 
-    // Set shader colors
-    useMemo(() => {
-        if (planetMatRef.current) {
-            planetMatRef.current.uniforms.uColor1.value.set(palette.surface1);
-            planetMatRef.current.uniforms.uColor2.value.set(palette.surface2);
-        }
-        if (atmosMatRef.current) {
-            atmosMatRef.current.uniforms.uAtmosphereColor.value.set(palette.atmosphere);
-        }
-    }, [palette]);
+    useEffect(() => () => surfaceTexture.dispose(), [surfaceTexture]);
 
-    useFrame((state) => {
-        const t = orbitsPaused ? 0 : state.clock.elapsedTime;
-
-        // Orbit position
-        const pos = getOrbitPosition(project.orbitRadius, project.orbitSpeed, t, project.tilt);
-        const drift = getAntiGravityDrift(t, 0.3 + project.orbitSpeed, 0.12);
-
-        if (groupRef.current) {
-            groupRef.current.position.set(pos.x, pos.y + drift.dy, pos.z + drift.dz);
-        }
-
-        // Update shader uniforms
-        if (planetMatRef.current) {
-            planetMatRef.current.uniforms.uTime.value = state.clock.elapsedTime;
-            planetMatRef.current.uniforms.uSelected.value = THREE.MathUtils.lerp(
-                planetMatRef.current.uniforms.uSelected.value,
-                isSelected ? 1.0 : 0.0,
-                0.05
-            );
-        }
-        if (atmosMatRef.current) {
-            atmosMatRef.current.uniforms.uTime.value = state.clock.elapsedTime;
-        }
+    useFrame((_, delta) => {
+        if (!hoveredPlanetKey) timeAccum.current += delta;
+        const position = getOrbitPosition(
+            orbitRadius,
+            orbitPeriod,
+            timeAccum.current,
+            tilt,
+            planet.eccentricity,
+            planet.periapsis,
+            planet.meanAnomaly + index * 0.18
+        );
+        groupRef.current?.position.set(position.x, position.y, position.z);
     });
-
-    const planetSize = 0.4 + project.orbitRadius * 0.04;
 
     return (
         <group ref={groupRef}>
-            {/* Planet sphere */}
             <mesh
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onClick(project.id, groupRef.current.position.clone());
+                onClick={(event) => {
+                    event.stopPropagation();
+                    if (project) onClick(project.id, groupRef.current.position.clone());
                 }}
                 onPointerOver={() => {
                     setHovered(true);
-                    document.body.style.cursor = 'pointer';
+                    setHoveredPlanet(planet.key);
+                    document.body.style.cursor = project ? 'pointer' : 'default';
                 }}
                 onPointerOut={() => {
                     setHovered(false);
+                    clearHoveredPlanet(planet.key);
                     document.body.style.cursor = 'auto';
                 }}
             >
-                <sphereGeometry args={[planetSize, 48, 48]} />
-                <planetMaterial ref={planetMatRef} />
+                <sphereGeometry args={[radius, 40, 40]} />
+                <meshStandardMaterial map={surfaceTexture} roughness={0.9} metalness={0} emissive="#000000" />
             </mesh>
 
-            {/* Atmospheric halo */}
-            <mesh>
-                <sphereGeometry args={[planetSize * 1.2, 32, 32]} />
-                <atmosphereMaterial ref={atmosMatRef} />
-            </mesh>
-
-            {/* Selection ring */}
             {isSelected && (
                 <mesh rotation-x={Math.PI / 2}>
-                    <torusGeometry args={[planetSize * 1.8, 0.02, 8, 64]} />
-                    <meshBasicMaterial
-                        color={glowColor.hex}
-                        transparent
-                        opacity={0.7}
-                        depthWrite={false}
-                    />
+                    <ringGeometry args={[radius * 1.5, radius * 1.58, 64]} />
+                    <meshBasicMaterial color="#dce8fb" transparent opacity={0.8} side={THREE.DoubleSide} />
                 </mesh>
             )}
 
-            {/* Status glow point */}
-            <pointLight
-                color={glowColor.hex}
-                intensity={isSelected ? 2 : hovered ? 1.2 : 0.5}
-                distance={5}
-                decay={2}
-            />
+            {planet.hasRings && (
+                <mesh rotation={[Math.PI / 2.35, 0, -0.18]}>
+                    <ringGeometry args={[radius * 1.42, radius * 2.25, 96]} />
+                    <meshBasicMaterial color="#d6c699" transparent opacity={0.62} side={THREE.DoubleSide} depthWrite={false} />
+                </mesh>
+            )}
 
-            {/* Floating label */}
-            <Html
-                position={[0, planetSize + 0.6, 0]}
-                center
-                distanceFactor={10}
-                style={{
-                    pointerEvents: 'none',
-                    userSelect: 'none',
-                }}
-            >
-                <div
-                    style={{
-                        color: 'white',
-                        fontSize: '11px',
-                        fontFamily: 'Inter, sans-serif',
-                        fontWeight: 500,
-                        background: 'rgba(10, 10, 32, 0.7)',
-                        padding: '3px 10px',
-                        borderRadius: '20px',
-                        border: `1px solid ${glowColor.hex}40`,
-                        whiteSpace: 'nowrap',
-                        backdropFilter: 'blur(8px)',
-                        opacity: hovered || isSelected ? 1 : 0.6,
-                        transition: 'opacity 0.3s',
-                    }}
-                >
-                    {project.name}
-                </div>
+            {planet.key === 'earth' && <Moon paused={Boolean(hoveredPlanetKey)} />}
+
+            <Html position={[0, radius + 0.38, 0]} center distanceFactor={12} style={{ pointerEvents: 'none' }}>
+                <div className={`planet-label ${hovered || isSelected ? 'is-visible' : ''}`}>{project ? `${planet.name} · ${project.name}` : planet.name}</div>
             </Html>
         </group>
     );

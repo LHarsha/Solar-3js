@@ -10,9 +10,7 @@ const DEFAULT_PROJECTS = [
         tags: ['react', 'design-system', 'ui'],
         status: 'active',
         color: 210,
-        orbitRadius: 4,
-        orbitSpeed: 0.3,
-        tilt: 0.1,
+        planetKey: 'earth',
         createdAt: Date.now() - 86400000 * 30,
         modifiedAt: Date.now() - 86400000 * 2,
     },
@@ -23,9 +21,7 @@ const DEFAULT_PROJECTS = [
         tags: ['backend', 'graphql', 'api'],
         status: 'paused',
         color: 280,
-        orbitRadius: 7,
-        orbitSpeed: 0.2,
-        tilt: -0.15,
+        planetKey: 'mars',
         createdAt: Date.now() - 86400000 * 60,
         modifiedAt: Date.now() - 86400000 * 5,
     },
@@ -36,9 +32,7 @@ const DEFAULT_PROJECTS = [
         tags: ['ml', 'python', 'data'],
         status: 'complete',
         color: 150,
-        orbitRadius: 10,
-        orbitSpeed: 0.15,
-        tilt: 0.2,
+        planetKey: 'jupiter',
         createdAt: Date.now() - 86400000 * 90,
         modifiedAt: Date.now() - 86400000 * 1,
     },
@@ -49,16 +43,10 @@ const useProjectStore = create(
         (set, get) => ({
             projects: DEFAULT_PROJECTS,
             selectedId: null,
-            gestureState: {
-                activeGesture: 'NONE',
-                isTracking: false,
-                handLandmarks: null,
-            },
-            orbitsPaused: false,
+            hoveredPlanetKey: null,
 
             addProject: (name) => {
                 const projects = get().projects;
-                const orbitRadius = 3.5 + projects.length * 2.5 + Math.random() * 1.5;
                 const newProject = {
                     id: uuidv4(),
                     name,
@@ -66,9 +54,7 @@ const useProjectStore = create(
                     tags: [],
                     status: 'active',
                     color: Math.floor(Math.random() * 360),
-                    orbitRadius,
-                    orbitSpeed: 0.1 + Math.random() * 0.3,
-                    tilt: (Math.random() - 0.5) * 0.3,
+                    planetKey: ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'][projects.length % 8],
                     createdAt: Date.now(),
                     modifiedAt: Date.now(),
                 };
@@ -90,13 +76,11 @@ const useProjectStore = create(
                 })),
 
             selectPlanet: (id) => set({ selectedId: id }),
-
-            setGestureState: (gestureState) =>
-                set((state) => ({
-                    gestureState: { ...state.gestureState, ...gestureState },
-                })),
-
-            pauseOrbits: (paused) => set({ orbitsPaused: paused }),
+            setHoveredPlanet: (planetKey) => set({ hoveredPlanetKey: planetKey }),
+            clearHoveredPlanet: (planetKey) =>
+                set((state) =>
+                    state.hoveredPlanetKey === planetKey ? { hoveredPlanetKey: null } : state
+                ),
         }),
         {
             name: 'solar-project-manager',

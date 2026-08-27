@@ -15,7 +15,7 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: #050510;
+    background: #06080d;
     font-family: 'Inter', system-ui, sans-serif;
     color: #e2e8f0;
   }
@@ -33,6 +33,9 @@
     border-radius: 2px;
   }
 }
+
+.planet-label { padding: 4px 8px; border-radius: 4px; color: #dfe7f0; font: 500 11px/1 Inter, sans-serif; white-space: nowrap; background: rgba(7, 10, 15, .78); border: 1px solid rgba(191, 205, 222, .18); opacity: .48; transition: opacity .18s; }
+.planet-label.is-visible { opacity: 1; }
 
 @layer components {
   .glass-panel {
