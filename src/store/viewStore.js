@@ -24,6 +24,8 @@ const useViewStore = create(
             showOrbits: true,
             venusSurface: false,
             aboutOpen: false,
+            // Once you have dragged or zoomed, the controls hint fades out for good.
+            hintSeen: false,
 
             focus: (focusKey) => set((state) => ({ focusKey, landmarkId: null, visitId: state.visitId + 1 })),
             visitLandmark: (focusKey, landmarkId) => set((state) => ({
@@ -44,10 +46,11 @@ const useViewStore = create(
             setShowOrbits: (showOrbits) => set({ showOrbits }),
             setVenusSurface: (venusSurface) => set({ venusSurface }),
             setAboutOpen: (aboutOpen) => set({ aboutOpen }),
+            dismissHint: () => { if (!get().hintSeen) set({ hintSeen: true }); },
         }),
         {
             name: 'solar-view-prefs',
-            partialize: ({ showLabels, showOrbits }) => ({ showLabels, showOrbits }),
+            partialize: ({ showLabels, showOrbits, hintSeen }) => ({ showLabels, showOrbits, hintSeen }),
         }
     )
 );

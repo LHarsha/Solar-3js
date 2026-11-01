@@ -123,11 +123,13 @@ function usePointerInput(element, input) {
             if (!pointers.delete(event.pointerId)) return;
             if (pointers.size === 1) mode = 'orbit';
             if (pointers.size === 0) setDragging(false);
+            if (drag.travelled > 80) useViewStore.getState().dismissHint();
         };
         const onWheel = (event) => {
             event.preventDefault();
             const scale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 100 : 1;
             state.zoom += THREE.MathUtils.clamp(event.deltaY * scale, -200, 200) * 0.0016;
+            useViewStore.getState().dismissHint();
         };
         const onContextMenu = (event) => event.preventDefault();
         const onDoubleClick = () => { state.recentre = true; };

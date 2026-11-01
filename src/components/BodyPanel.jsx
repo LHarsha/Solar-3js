@@ -66,6 +66,44 @@ function LiveDistances({ body }) {
     );
 }
 
+const EARTH_DIAMETER_KM = 12756;
+const parseKm = (text) => Number.parseFloat(String(text).replace(/,/g, ''));
+
+function formatRatio(ratio) {
+    if (ratio >= 10) return numberFormat.format(Math.round(ratio));
+    return ratio >= 0.1 ? ratio.toFixed(2).replace(/0$/, '') : ratio.toPrecision(2);
+}
+
+// The body beside Earth, both to scale and standing on a common baseline.
+function SizeComparison({ body }) {
+    const diameter = parseKm(body.facts?.diameter);
+    if (!diameter || body.key === 'earth') return null;
+    const ratio = diameter / EARTH_DIAMETER_KM;
+    const largest = 28;
+    const bodyRadius = Math.max(ratio >= 1 ? largest : largest * ratio, 0.8);
+    const earthRadius = Math.max(ratio >= 1 ? largest / ratio : largest, 0.8);
+    const baseline = largest * 2 + 2;
+    const bodyX = bodyRadius + 1;
+    const earthX = bodyX + bodyRadius + Math.max(earthRadius, 4) + 14;
+
+    return (
+        <section className="panel-section">
+            <h3>Size</h3>
+            <div className="size-compare">
+                <svg width={earthX + earthRadius + 2} height={baseline + 1} aria-hidden="true">
+                    <circle cx={bodyX} cy={baseline - bodyRadius} r={bodyRadius} className="size-compare__body" />
+                    <circle cx={earthX} cy={baseline - earthRadius} r={earthRadius} className="size-compare__earth" />
+                    <line x1="0" x2={earthX + earthRadius + 2} y1={baseline + 0.5} y2={baseline + 0.5} className="size-compare__ground" />
+                </svg>
+                <p>
+                    <span className="size-compare__ratio"><strong>{formatRatio(ratio)}×</strong> Earth&apos;s diameter</span>
+                    <span className="size-compare__note">{body.name} beside Earth, to scale</span>
+                </p>
+            </div>
+        </section>
+    );
+}
+
 export default function BodyPanel() {
     const focusKey = useViewStore((s) => s.focusKey);
     const landmarkId = useViewStore((s) => s.landmarkId);
@@ -109,6 +147,8 @@ export default function BodyPanel() {
                         )}
 
                         <LiveDistances body={body} />
+
+                        <SizeComparison body={body} />
 
                         <section className="panel-section">
                             <h3>Physical data</h3>
