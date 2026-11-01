@@ -61,6 +61,12 @@ export default function Hud() {
                 <Toggle on={showLabels} onChange={setShowLabels}>Labels</Toggle>
                 <Toggle on={showOrbits} onChange={setShowOrbits}>Orbits</Toggle>
             </div>
+
+            <p className="hud__hint">
+                <kbd>Drag</kbd> orbit<br />
+                <kbd>Right-drag</kbd> look around<br />
+                <kbd>Scroll</kbd> zoom · <kbd>Double-click</kbd> recentre
+            </p>
         </header>
     );
 }

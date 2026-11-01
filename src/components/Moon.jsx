@@ -10,6 +10,7 @@ import { getBody, getMoonDisplayRadius } from '../utils/bodies';
 import useViewStore from '../store/viewStore';
 import Atmosphere from './Atmosphere';
 import BodyLabel from './BodyLabel';
+import { selectHandlers } from '../utils/pointer';
 import LandmarkMarker from './LandmarkMarker';
 
 const DEG = Math.PI / 180;
@@ -21,9 +22,7 @@ function MoonSurface({ moon, radius, spinRef }) {
     return (
         <mesh
             ref={spinRef}
-            onClick={(event) => { event.stopPropagation(); focus(moon.key); }}
-            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+            {...selectHandlers(() => focus(moon.key))}
         >
             <sphereGeometry args={[radius, 48, 32]} />
             {texture}

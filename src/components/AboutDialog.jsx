@@ -28,7 +28,10 @@ export default function AboutDialog() {
                         <p>Positions of moons other than our own are illustrative; their orbital periods are real.</p>
                         <h3>Controls</h3>
                         <ul className="dialog__keys">
-                            <li><kbd>Drag</kbd> rotate · <kbd>Scroll</kbd> zoom · <kbd>Right-drag</kbd> pan</li>
+                            <li><kbd>Drag</kbd> orbit, all the way over the poles · <kbd>Scroll</kbd> zoom</li>
+                            <li><kbd>Right-drag</kbd> or <kbd>Shift</kbd>+drag look around the whole sky · <kbd>Double-click</kbd> or <kbd>R</kbd> face the target again</li>
+                            <li><kbd>Arrows</kbd> orbit · <kbd>Shift</kbd>+<kbd>Arrows</kbd> look · <kbd>+</kbd> <kbd>−</kbd> zoom</li>
+                            <li>Touch: one finger orbits, two fingers pinch to zoom and drag to look around</li>
                             <li><kbd>1</kbd>–<kbd>8</kbd> planets · <kbd>0</kbd> Sun · <kbd>Esc</kbd> overview · <kbd>Space</kbd> pause</li>
                         </ul>
                         <h3>Sources</h3>

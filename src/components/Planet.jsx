@@ -11,6 +11,7 @@ import Moon from './Moon';
 import SaturnRings from './SaturnRings';
 import Atmosphere from './Atmosphere';
 import BodyLabel from './BodyLabel';
+import { selectHandlers } from '../utils/pointer';
 import LandmarkMarker from './LandmarkMarker';
 
 const DEG = Math.PI / 180;
@@ -68,9 +69,7 @@ export default function Planet({ planet }) {
                 <mesh
                     ref={spinRef}
                     material={material}
-                    onClick={(event) => { event.stopPropagation(); focus(planet.key); }}
-                    onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-                    onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+                    {...selectHandlers(() => focus(planet.key))}
                 >
                     <sphereGeometry args={[radius, 96, 64]} />
                     <LandmarkMarker bodyKey={planet.key} radius={radius} />

@@ -8,7 +8,7 @@ An interactive 3D model of the Solar System you can travel through. The planets 
 
 - **Real positions.** The planets are computed for the current date from JPL Keplerian elements. You can pause time or run it at real time, 1 hour/s, 1 day/s, 1 week/s or 1 month/s, and jump back to now.
 - **Real rotation.** Earth turns with real sidereal time, so its day/night line and city lights match UTC. The Moon's phase follows the real lunar cycle. Planets rotate at their real day lengths and axial tilts, Venus and Uranus included, and Saturn's rings lie in its equatorial plane with the planet's shadow across them.
-- **Free camera.** Fly to the Sun, eight planets and thirteen major moons. The camera follows the body as it moves.
+- **Free camera.** Fly to the Sun, eight planets and thirteen major moons, and the camera follows the body as it moves. Drag to orbit all the way round, over the poles included; right-drag to look around the full sky from where you are. Scroll zooms smoothly, and a flick keeps turning for a moment.
 - **Places to visit.** Choose a landmark and the camera settles above that latitude and longitude, then turns with the ground beneath it.
 - **Fact sheets.** Each body has NASA physical data, plus live distance from Earth and light travel time for the simulated date.
 - **Venus.** Switch between its cloud tops and the radar map of its surface.

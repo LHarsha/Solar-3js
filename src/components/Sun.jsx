@@ -10,6 +10,7 @@ import { rotationAngle } from '../utils/orbitMath';
 import { prepareTexture } from '../utils/materials';
 import { SUN } from '../utils/bodies';
 import useViewStore from '../store/viewStore';
+import { selectHandlers } from '../utils/pointer';
 import BodyLabel from './BodyLabel';
 
 // Radial glow that falls off roughly with the inverse square of distance from the limb.
@@ -71,9 +72,7 @@ export default function Sun() {
             <mesh
                 ref={spinRef}
                 material={material}
-                onClick={(event) => { event.stopPropagation(); focus('sun'); }}
-                onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-                onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+                {...selectHandlers(() => focus('sun'))}
             >
                 <sphereGeometry args={[radius, 96, 64]} />
             </mesh>
