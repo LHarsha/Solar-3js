@@ -1,8 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
+import { prepareTexture } from '../utils/materials';
 
-const DISTANT_STAR_COUNT = 1350;
-const BRIGHT_STAR_COUNT = 100;
+const STAR_COUNT = 5000;
+const SKY_RADIUS = 900;
+const OBLIQUITY = 23.44 * (Math.PI / 180);
 
 function seededRandom(seed) {
     let value = seed >>> 0;
@@ -19,6 +23,7 @@ function makeStars(count, radius, seed) {
     const random = seededRandom(seed);
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
+    const sizes = new Float32Array(count);
     const palette = [
         new THREE.Color('#b9c9ff'),
         new THREE.Color('#f5f2df'),
@@ -29,41 +34,75 @@ function makeStars(count, radius, seed) {
     for (let index = 0; index < count; index += 1) {
         const theta = random() * Math.PI * 2;
         const phi = Math.acos(1 - random() * 2);
-        const distance = radius + (random() - 0.5) * 16;
         const sinPhi = Math.sin(phi);
-        positions[index * 3] = distance * sinPhi * Math.cos(theta);
-        positions[index * 3 + 1] = distance * Math.cos(phi);
-        positions[index * 3 + 2] = distance * sinPhi * Math.sin(theta);
+        positions[index * 3] = radius * sinPhi * Math.cos(theta);
+        positions[index * 3 + 1] = radius * Math.cos(phi);
+        positions[index * 3 + 2] = radius * sinPhi * Math.sin(theta);
 
         const color = palette[Math.floor(random() * palette.length)];
-        const intensity = 0.5 + random() * 0.5;
+        // Most stars are faint; a few are bright.
+        const intensity = 0.25 + random() ** 3 * 0.75;
         colors[index * 3] = color.r * intensity;
         colors[index * 3 + 1] = color.g * intensity;
         colors[index * 3 + 2] = color.b * intensity;
+        sizes[index] = 0.6 + random() ** 4 * 2.2;
     }
 
-    return { positions, colors };
+    return { positions, colors, sizes };
 }
 
-function StarLayer({ count, radius, size, opacity, seed }) {
-    const stars = useMemo(() => makeStars(count, radius, seed), [count, radius, seed]);
+const starVertex = /* glsl */ `
+    attribute float aSize;
+    varying vec3 vColor;
+    void main() {
+        vColor = color;
+        gl_PointSize = aSize;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+`;
 
-    return (
-        <points frustumCulled={false}>
-            <bufferGeometry>
-                <bufferAttribute attach="attributes-position" count={count} array={stars.positions} itemSize={3} />
-                <bufferAttribute attach="attributes-color" count={count} array={stars.colors} itemSize={3} />
-            </bufferGeometry>
-            <pointsMaterial vertexColors size={size} transparent opacity={opacity} sizeAttenuation depthWrite={false} />
-        </points>
-    );
-}
+const starFragment = /* glsl */ `
+    varying vec3 vColor;
+    void main() {
+        float distanceToCenter = length(gl_PointCoord - vec2(0.5));
+        float alpha = 1.0 - smoothstep(0.25, 0.5, distanceToCenter);
+        gl_FragColor = vec4(vColor, alpha);
+    }
+`;
 
+// The sky is infinitely far away: it follows the camera so it never shows parallax.
 export default function StarField() {
+    const groupRef = useRef();
+    const milkyWay = useTexture('/textures/stars_milky_way.jpg');
+    const stars = useMemo(() => makeStars(STAR_COUNT, SKY_RADIUS * 0.95, 1729), []);
+    const starMaterial = useMemo(() => new THREE.ShaderMaterial({
+        vertexShader: starVertex,
+        fragmentShader: starFragment,
+        transparent: true,
+        depthWrite: false,
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+    }), []);
+    const skyMap = useMemo(() => prepareTexture(milkyWay), [milkyWay]);
+
+    useFrame(({ camera }) => {
+        groupRef.current?.position.copy(camera.position);
+    });
+
     return (
-        <group>
-            <StarLayer count={DISTANT_STAR_COUNT} radius={126} size={0.12} opacity={0.68} seed={1729} />
-            <StarLayer count={BRIGHT_STAR_COUNT} radius={118} size={0.28} opacity={0.95} seed={941} />
+        <group ref={groupRef}>
+            {/* The map is in equatorial coordinates; tilt it by the obliquity so it sits correctly around the ecliptic. */}
+            <mesh rotation-x={-OBLIQUITY} scale={[-1, 1, 1]} renderOrder={-2} raycast={() => null}>
+                <sphereGeometry args={[SKY_RADIUS, 64, 32]} />
+                <meshBasicMaterial map={skyMap} color={[0.32, 0.32, 0.34]} side={THREE.BackSide} depthWrite={false} toneMapped={false} />
+            </mesh>
+            <points frustumCulled={false} material={starMaterial} renderOrder={-1} raycast={() => null}>
+                <bufferGeometry>
+                    <bufferAttribute attach="attributes-position" count={STAR_COUNT} array={stars.positions} itemSize={3} />
+                    <bufferAttribute attach="attributes-color" count={STAR_COUNT} array={stars.colors} itemSize={3} />
+                    <bufferAttribute attach="attributes-aSize" count={STAR_COUNT} array={stars.sizes} itemSize={1} />
+                </bufferGeometry>
+            </points>
         </group>
     );
 }

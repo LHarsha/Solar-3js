@@ -1,21 +1,16 @@
-uniform vec3 uAtmosphereColor;
-uniform float uTime;
+// Back-face shell around the planet: brightest at the limb, fading outward, lit only on the day side.
+uniform vec3 uColor;
+uniform float uStrength;
 
-varying vec3 vNormal;
-varying vec3 vPosition;
+varying vec3 vNormalW;
+varying vec3 vPositionW;
 
 void main() {
-  // Fresnel-based rim glow
-  vec3 viewDir = normalize(cameraPosition - vPosition);
-  float fresnel = 1.0 - dot(viewDir, vNormal);
-  fresnel = pow(fresnel, 3.0);
-
-  // Subtle pulsing
-  float pulse = 0.85 + 0.15 * sin(uTime * 1.5);
-  fresnel *= pulse;
-
-  vec3 color = uAtmosphereColor;
-  float alpha = fresnel * 0.6;
-
-  gl_FragColor = vec4(color, alpha);
+  vec3 normal = normalize(vNormalW);
+  vec3 toCamera = normalize(cameraPosition - vPositionW);
+  float limb = clamp(-dot(normal, toCamera) / 0.32, 0.0, 1.0);
+  float glow = pow(limb, 2.2);
+  float day = smoothstep(-0.35, 0.45, dot(normal, normalize(-vPositionW)));
+  gl_FragColor = vec4(uColor, glow * day * uStrength);
+  #include <colorspace_fragment>
 }

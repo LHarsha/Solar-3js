@@ -1,125 +1,64 @@
-import { useRef, useMemo } from 'react';
-import { useFrame, extend } from '@react-three/fiber';
+import { useEffect, useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
-import planetVertexShader from '../shaders/planet.vert';
-import sunFragmentShader from '../shaders/sun.frag';
+import { bodyObjects } from '../utils/planetRegistry';
+import { simClock } from '../utils/simClock';
+import { rotationAngle } from '../utils/orbitMath';
+import { prepareTexture } from '../utils/materials';
+import { SUN } from '../utils/bodies';
+import useViewStore from '../store/viewStore';
+import BodyLabel from './BodyLabel';
 
-class SunMaterial extends THREE.ShaderMaterial {
-    constructor() {
-        super({
-            vertexShader: planetVertexShader,
-            fragmentShader: sunFragmentShader,
-            uniforms: {
-                uTime: { value: 0 },
-            },
-        });
-    }
-}
-
-extend({ SunMaterial });
-
-const CORONA_COUNT = 300;
-
-function coronaRandom(index, salt) {
-    const value = Math.sin((index + 1) * 12.9898 + salt * 78.233) * 43758.5453;
-    return value - Math.floor(value);
+function createCoronaTexture() {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const context = canvas.getContext('2d');
+    const gradient = context.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, 'rgba(255, 246, 228, 1)');
+    gradient.addColorStop(0.22, 'rgba(255, 226, 180, .55)');
+    gradient.addColorStop(0.45, 'rgba(255, 196, 130, .14)');
+    gradient.addColorStop(1, 'rgba(255, 180, 110, 0)');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, size, size);
+    return new THREE.CanvasTexture(canvas);
 }
 
 export default function Sun() {
-    const meshRef = useRef();
-    const materialRef = useRef();
-    const coronaRef = useRef();
-    const coronaSphereRef = useRef();
-    const timeAccum = useRef(0);
+    const anchorRef = useRef();
+    const spinRef = useRef();
+    const focus = useViewStore((s) => s.focus);
+    const map = useTexture(SUN.texture);
+    const surface = useMemo(() => prepareTexture(map), [map]);
+    const corona = useMemo(() => createCoronaTexture(), []);
+    useEffect(() => () => corona.dispose(), [corona]);
 
-    // Corona particles
-    const coronaPositions = useMemo(() => {
-        const pos = new Float32Array(CORONA_COUNT * 3);
-        for (let i = 0; i < CORONA_COUNT; i++) {
-            const theta = coronaRandom(i, 1) * Math.PI * 2;
-            const phi = Math.acos(2 * coronaRandom(i, 2) - 1);
-            const r = 2.4 + coronaRandom(i, 3) * 1.2;
-            pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-            pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-            pos[i * 3 + 2] = r * Math.cos(phi);
-        }
-        return pos;
+    useEffect(() => {
+        bodyObjects.set('sun', { anchor: anchorRef.current, spin: spinRef.current, radius: SUN.displayRadius });
+        return () => bodyObjects.delete('sun');
     }, []);
 
-    useFrame((_, delta) => {
-        timeAccum.current += delta;
-        const t = timeAccum.current;
-
-        if (materialRef.current) {
-            materialRef.current.uniforms.uTime.value = t;
-        }
-        if (coronaRef.current) {
-            coronaRef.current.rotation.y += delta * 0.1;
-            coronaRef.current.rotation.z += delta * 0.05;
-        }
-        if (coronaSphereRef.current) {
-            const scale = 3.2 + Math.sin(t * 1.5) * 0.2;
-            coronaSphereRef.current.scale.set(scale, scale, scale);
-        }
+    useFrame(() => {
+        if (spinRef.current) spinRef.current.rotation.y = rotationAngle(SUN.rotationHours, simClock.time);
     });
 
     return (
-        <group position={[0, 0, 0]}>
-            {/* Core sun sphere — radius 2, high-res */}
-            <mesh ref={meshRef}>
-                <sphereGeometry args={[2, 64, 64]} />
-                <sunMaterial ref={materialRef} />
+        <group ref={anchorRef}>
+            <mesh
+                ref={spinRef}
+                onClick={(event) => { event.stopPropagation(); focus('sun'); }}
+                onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+                onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+            >
+                <sphereGeometry args={[SUN.displayRadius, 96, 64]} />
+                {/* Over-bright and un-tonemapped so the bloom pass picks it up. */}
+                <meshBasicMaterial map={surface} color={[2.2, 1.9, 1.5]} toneMapped={false} />
             </mesh>
-
-            {/* Corona glow sphere — larger transparent sphere with additive blending */}
-            <mesh ref={coronaSphereRef}>
-                <sphereGeometry args={[1, 48, 48]} />
-                <meshBasicMaterial
-                    color="#ff8800"
-                    transparent
-                    opacity={0.08}
-                    blending={THREE.AdditiveBlending}
-                    side={THREE.BackSide}
-                    depthWrite={false}
-                />
-            </mesh>
-
-            {/* Second outer corona glow */}
-            <mesh>
-                <sphereGeometry args={[4.5, 32, 32]} />
-                <meshBasicMaterial
-                    color="#ff6600"
-                    transparent
-                    opacity={0.04}
-                    blending={THREE.AdditiveBlending}
-                    side={THREE.BackSide}
-                    depthWrite={false}
-                />
-            </mesh>
-
-            {/* Corona particles */}
-            <points ref={coronaRef}>
-                <bufferGeometry>
-                    <bufferAttribute
-                        attach="attributes-position"
-                        count={CORONA_COUNT}
-                        array={coronaPositions}
-                        itemSize={3}
-                    />
-                </bufferGeometry>
-                <pointsMaterial
-                    size={0.06}
-                    color="#ffaa44"
-                    transparent
-                    opacity={0.6}
-                    sizeAttenuation
-                    depthWrite={false}
-                    blending={THREE.AdditiveBlending}
-                />
-            </points>
-
-            {/* Central point light — illuminates planets from the sun */}
-            <pointLight color="#fff1d6" intensity={2200} distance={90} decay={2} />
+            <sprite scale={SUN.displayRadius * 4.2} raycast={() => null}>
+                <spriteMaterial map={corona} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} opacity={0.4} />
+            </sprite>
+            <BodyLabel bodyKey="sun" name="Sun" radius={SUN.displayRadius} />
         </group>
     );
 }

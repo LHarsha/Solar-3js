@@ -1,36 +1,21 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { getOrbitPoints } from '../utils/orbitMath';
+import useViewStore from '../store/viewStore';
 
+const OPENED_AT = Date.now();
+
+// The orbit drawn for the date the page opened. Elements drift by tiny amounts per century, so it stays accurate.
 export default function OrbitalPath({ planet }) {
-    const points = useMemo(
-        () => getOrbitPoints(
-            planet.orbitRadius,
-            planet.inclination * (Math.PI / 180),
-            planet.eccentricity,
-            planet.periapsis,
-            160
-        ),
-        [planet]
-    );
+    const showOrbits = useViewStore((s) => s.showOrbits);
+    const focused = useViewStore((s) => s.focusKey === planet.key);
+    const geometry = useMemo(() => new THREE.BufferGeometry().setFromPoints(getOrbitPoints(planet, OPENED_AT)), [planet]);
+    useEffect(() => () => geometry.dispose(), [geometry]);
 
-    // Create geometry from the orbit points using THREE.BufferGeometry
-    const geometry = useMemo(() => {
-        const geo = new THREE.BufferGeometry().setFromPoints(points);
-        return geo;
-    }, [points]);
-
-    const material = useMemo(() => {
-        return new THREE.LineBasicMaterial({
-            color: planet.orbitColor,
-            transparent: true,
-            opacity: 0.16,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-        });
-    }, [planet.orbitColor]);
-
+    if (!showOrbits) return null;
     return (
-        <line geometry={geometry} material={material} />
+        <line geometry={geometry} raycast={() => null}>
+            <lineBasicMaterial color="#8fa3bf" transparent opacity={focused ? 0.3 : 0.09} depthWrite={false} />
+        </line>
     );
 }
