@@ -6,6 +6,7 @@ import { GALACTIC_TO_SCENE, SCENE_TO_GALACTIC } from '../utils/skyFrame';
 
 const SKY_RADIUS = 900;
 const STAR_COUNT = 9000;
+const CLOUD_COUNT = 80000;
 
 function seededRandom(seed) {
     let value = seed >>> 0;
@@ -112,6 +113,7 @@ const skyFragment = /* glsl */ `
     uniform sampler2D uMap;
     uniform mat3 uToGalactic;
     uniform float uExposure;
+    uniform float uFloor;
     varying vec3 vDirection;
     const float PI = 3.141592653589793;
     void main() {
@@ -120,37 +122,78 @@ const skyFragment = /* glsl */ `
         float b = asin(clamp(g.z, -1.0, 1.0));
         // The map's first and last rows carry edge artefacts; stay clear of them near the galactic poles.
         vec2 uv = vec2(fract(0.5 - l / (2.0 * PI)), clamp(0.5 - b / PI, 0.015, 0.985));
-        vec3 sky = texture2D(uMap, uv).rgb;
-        // Mostly desaturated: the source mosaic has colour-only artefacts (trails, seams) that would otherwise show.
-        float glow = dot(sky, vec3(0.299, 0.587, 0.114));
-        sky = mix(vec3(glow) * vec3(0.94, 0.97, 1.06), sky, 0.25);
-        sky = max(sky * uExposure - 0.003, 0.0);
-        gl_FragColor = vec4(sky, 1.0);
+        // Brightness only: the source mosaic has colour-only artefacts (trails, seams) that would otherwise show.
+        float glow = max(dot(texture2D(uMap, uv).rgb, vec3(0.2126, 0.7152, 0.0722)) - uFloor, 0.0);
+        // Old stars make the central bulge faintly warm; the disc is close to neutral white.
+        float bulge = exp(-l * l / 0.4 - b * b / 0.06);
+        vec3 tint = mix(vec3(0.9, 0.95, 1.05), vec3(1.08, 0.98, 0.86), bulge);
+        gl_FragColor = vec4(glow * uExposure * tint, 1.0);
         #include <colorspace_fragment>
+        // Dither by under one 8-bit step so the faint gradients don't band.
+        float noise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+        gl_FragColor.rgb += (noise - 0.5) / 255.0;
     }
 `;
 
+const srgbToLinear = (value) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+
+// Separable Gaussian blur of an RGB float image, wrapping horizontally (the map is a full circle of longitude).
+function blur(data, width, height, sigma) {
+    const radius = Math.ceil(sigma * 2.5);
+    const kernel = [];
+    let total = 0;
+    for (let offset = -radius; offset <= radius; offset += 1) {
+        const weight = Math.exp(-(offset * offset) / (2 * sigma * sigma));
+        kernel.push(weight);
+        total += weight;
+    }
+    for (let index = 0; index < kernel.length; index += 1) kernel[index] /= total;
+
+    const pass = (source, horizontal) => {
+        const target = new Float32Array(source.length);
+        for (let y = 0; y < height; y += 1) {
+            for (let x = 0; x < width; x += 1) {
+                let r = 0;
+                let g = 0;
+                let b = 0;
+                for (let k = 0; k < kernel.length; k += 1) {
+                    const offset = k - radius;
+                    const sx = horizontal ? (x + offset + width) % width : x;
+                    const sy = horizontal ? y : Math.min(height - 1, Math.max(0, y + offset));
+                    const index = (sy * width + sx) * 3;
+                    r += source[index] * kernel[k];
+                    g += source[index + 1] * kernel[k];
+                    b += source[index + 2] * kernel[k];
+                }
+                const index = (y * width + x) * 3;
+                target[index] = r;
+                target[index + 1] = g;
+                target[index + 2] = b;
+            }
+        }
+        return target;
+    };
+    return pass(pass(data, true), false);
+}
+
 /**
- * Keeps only the diffuse glow of the Milky Way map. Each 4×4 block becomes its dimmer pixels (a low
- * percentile), which removes the map's own stars; magnified on screen they would look like soft blocks.
- * The crisp stars are drawn as points instead.
+ * Keeps only the diffuse glow of the Milky Way map. Each 4×4 block becomes one of its dimmer pixels (a low
+ * percentile), which removes the map's own stars; the crisp stars are drawn as points instead.
+ * The band is only a few 8-bit steps above black, so the result is kept in linear floating point:
+ * brightened as an 8-bit texture, those steps would show as blotches.
  */
-function createGlowTexture(image) {
+function buildGlow(image) {
     const source = document.createElement('canvas');
     source.width = image.width;
     source.height = image.height;
-    const sourceContext = source.getContext('2d', { willReadFrequently: true });
-    sourceContext.drawImage(image, 0, 0);
-    const pixels = sourceContext.getImageData(0, 0, image.width, image.height).data;
+    const context = source.getContext('2d', { willReadFrequently: true });
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(0, 0, image.width, image.height).data;
 
     const block = 4;
     const width = Math.floor(image.width / block);
     const height = Math.floor(image.height / block);
-    const reduced = document.createElement('canvas');
-    reduced.width = width;
-    reduced.height = height;
-    const reducedContext = reduced.getContext('2d');
-    const output = reducedContext.createImageData(width, height);
+    const linear = new Float32Array(width * height * 3);
     const samples = new Array(block * block);
 
     for (let y = 0; y < height; y += 1) {
@@ -158,36 +201,100 @@ function createGlowTexture(image) {
             let count = 0;
             for (let dy = 0; dy < block; dy += 1) {
                 for (let dx = 0; dx < block; dx += 1) {
-                    const index = ((y * block + dy) * image.width + x * block + dx) * 4;
-                    samples[count] = index;
+                    samples[count] = ((y * block + dy) * image.width + x * block + dx) * 4;
                     count += 1;
                 }
             }
             samples.sort((a, b) => (pixels[a] + pixels[a + 1] + pixels[a + 2]) - (pixels[b] + pixels[b + 1] + pixels[b + 2]));
             const pick = samples[4];
-            const target = (y * width + x) * 4;
-            output.data[target] = pixels[pick];
-            output.data[target + 1] = pixels[pick + 1];
-            output.data[target + 2] = pixels[pick + 2];
-            output.data[target + 3] = 255;
+            const index = (y * width + x) * 3;
+            linear[index] = srgbToLinear(pixels[pick] / 255);
+            linear[index + 1] = srgbToLinear(pixels[pick + 1] / 255);
+            linear[index + 2] = srgbToLinear(pixels[pick + 2] / 255);
         }
     }
-    reducedContext.putImageData(output, 0, 0);
 
-    // A light blur, wrapping horizontally so the seam at the map's edge stays invisible.
-    const glow = document.createElement('canvas');
-    glow.width = width;
-    glow.height = height;
-    const glowContext = glow.getContext('2d');
-    glowContext.filter = 'blur(1.5px)';
-    for (const offset of [-width, 0, width]) glowContext.drawImage(reduced, offset, 0);
+    return { data: blur(linear, width, height, 1.6), width, height };
+}
 
-    const texture = new THREE.CanvasTexture(glow);
-    texture.colorSpace = THREE.SRGBColorSpace;
+// Half-float texture of the glow. Rows are flipped so the image's top row sits at v = 1, as with an image texture.
+function createGlowTexture({ data, width, height }) {
+    const half = new Uint16Array(width * height * 4);
+    const one = THREE.DataUtils.toHalfFloat(1);
+    for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+            const from = (y * width + x) * 3;
+            const to = ((height - 1 - y) * width + x) * 4;
+            half[to] = THREE.DataUtils.toHalfFloat(data[from]);
+            half[to + 1] = THREE.DataUtils.toHalfFloat(data[from + 1]);
+            half[to + 2] = THREE.DataUtils.toHalfFloat(data[from + 2]);
+            half[to + 3] = one;
+        }
+    }
+    const texture = new THREE.DataTexture(half, width, height, THREE.RGBAFormat, THREE.HalfFloatType);
     texture.wrapS = THREE.RepeatWrapping;
-    texture.generateMipmaps = false;
+    texture.magFilter = THREE.LinearFilter;
     texture.minFilter = THREE.LinearFilter;
+    texture.needsUpdate = true;
     return texture;
+}
+
+// Linear brightness of the map's empty sky, measured off the galactic plane; anything below it is JPEG noise.
+const GLOW_FLOOR = 0.00045;
+
+/**
+ * The faint, unresolved stars that make up the Milky Way's band, placed with the density of the map's own glow,
+ * so its star clouds and dark dust lanes come from real data rather than a pattern.
+ */
+function makeStarClouds(glow, count, radius, seed) {
+    const random = seededRandom(seed);
+    const { data, width, height } = glow;
+    const weights = new Float64Array(width * height);
+    let total = 0;
+    for (let y = 0; y < height; y += 1) {
+        // Image rows run from galactic south (top) to north, matching the sky shader.
+        const latitude = ((y + 0.5) / height - 0.5) * Math.PI;
+        const area = Math.cos(latitude);
+        for (let x = 0; x < width; x += 1) {
+            const index = (y * width + x) * 3;
+            const luminance = data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722;
+            total += Math.max(luminance - GLOW_FLOOR, 0) ** 1.2 * area;
+            weights[y * width + x] = total;
+        }
+    }
+
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    const sizes = new Float32Array(count);
+    const direction = new THREE.Vector3();
+    const color = new THREE.Color();
+    for (let index = 0; index < count; index += 1) {
+        // Binary search of the cumulative weights picks a map cell in proportion to its glow.
+        const goal = random() * total;
+        let low = 0;
+        let high = weights.length - 1;
+        while (low < high) {
+            const middle = (low + high) >> 1;
+            if (weights[middle] < goal) low = middle + 1;
+            else high = middle;
+        }
+        const x = (low % width) + random();
+        const y = Math.floor(low / width) + random();
+        const longitude = (0.5 - x / width) * Math.PI * 2;
+        const latitude = (y / height - 0.5) * Math.PI;
+        direction.set(Math.cos(latitude) * Math.cos(longitude), Math.cos(latitude) * Math.sin(longitude), Math.sin(latitude))
+            .applyMatrix3(GALACTIC_TO_SCENE)
+            .multiplyScalar(radius);
+        positions.set([direction.x, direction.y, direction.z], index * 3);
+
+        // The bulge around the galactic centre is older and redder; the disc further out is whiter.
+        const bulge = Math.exp(-(longitude ** 2) / 0.35 - (latitude ** 2) / 0.05);
+        color.copy(pickColor(random)).lerp(STAR_COLORS[4][0], bulge * 0.6);
+        const intensity = 0.09 + random() ** 4 * 0.3;
+        colors.set([color.r * intensity, color.g * intensity, color.b * intensity], index * 3);
+        sizes[index] = 2 + random() * 0.8;
+    }
+    return { positions, colors, sizes };
 }
 
 // The sky is infinitely far away: it follows the camera so it never shows parallax.
@@ -196,18 +303,21 @@ export default function StarField() {
     const pixelRatio = useThree((state) => state.viewport.dpr);
     const milkyWay = useTexture('/textures/stars_milky_way.jpg');
     const stars = useMemo(() => makeStars(STAR_COUNT, SKY_RADIUS * 0.95, 1729), []);
+    const glow = useMemo(() => buildGlow(milkyWay.image), [milkyWay]);
+    const clouds = useMemo(() => makeStarClouds(glow, CLOUD_COUNT, SKY_RADIUS * 0.96, 4271), [glow]);
 
     const skyMaterial = useMemo(() => new THREE.ShaderMaterial({
         vertexShader: skyVertex,
         fragmentShader: skyFragment,
         uniforms: {
-            uMap: { value: createGlowTexture(milkyWay.image) },
+            uMap: { value: createGlowTexture(glow) },
             uToGalactic: { value: SCENE_TO_GALACTIC },
-            uExposure: { value: 8 },
+            uExposure: { value: 4 },
+            uFloor: { value: GLOW_FLOOR },
         },
         side: THREE.BackSide,
         depthWrite: false,
-    }), [milkyWay]);
+    }), [glow]);
 
     const starMaterial = useMemo(() => new THREE.ShaderMaterial({
         vertexShader: starVertex,
@@ -230,6 +340,13 @@ export default function StarField() {
             <mesh material={skyMaterial} renderOrder={-2} raycast={() => null}>
                 <sphereGeometry args={[SKY_RADIUS, 48, 24]} />
             </mesh>
+            <points frustumCulled={false} material={starMaterial} renderOrder={-1} raycast={() => null}>
+                <bufferGeometry>
+                    <bufferAttribute attach="attributes-position" count={CLOUD_COUNT} array={clouds.positions} itemSize={3} />
+                    <bufferAttribute attach="attributes-color" count={CLOUD_COUNT} array={clouds.colors} itemSize={3} />
+                    <bufferAttribute attach="attributes-aSize" count={CLOUD_COUNT} array={clouds.sizes} itemSize={1} />
+                </bufferGeometry>
+            </points>
             <points frustumCulled={false} material={starMaterial} renderOrder={-1} raycast={() => null}>
                 <bufferGeometry>
                     <bufferAttribute attach="attributes-position" count={STAR_COUNT} array={stars.positions} itemSize={3} />

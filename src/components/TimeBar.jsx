@@ -13,6 +13,12 @@ export default function TimeBar() {
 
     return (
         <div className="time-bar" role="group" aria-label="Simulation time">
+            <p className="time-bar__hint">
+                <span><kbd>Drag</kbd> orbit</span>
+                <span><kbd>Right-drag</kbd> look around</span>
+                <span><kbd>Scroll</kbd> zoom</span>
+                <span><kbd>Double-click</kbd> recentre</span>
+            </p>
             <div className="time-bar__clock" aria-live="off">
                 <span className="time-bar__date">{dateFormat.format(time)}</span>
                 <span className="time-bar__utc">{timeFormat.format(time)} UTC</span>
