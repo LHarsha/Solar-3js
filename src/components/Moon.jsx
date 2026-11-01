@@ -25,7 +25,7 @@ function MoonSurface({ moon, radius, spinRef }) {
             onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
             onPointerOut={() => { document.body.style.cursor = 'auto'; }}
         >
-            <sphereGeometry args={[radius, 64, 48]} />
+            <sphereGeometry args={[radius, 48, 32]} />
             {texture}
             <LandmarkMarker bodyKey={moon.key} radius={radius} />
         </mesh>
@@ -43,6 +43,8 @@ function ProceduralMaterial({ moon }) {
     const material = useMemo(() => createBodyMaterial({
         map: createProceduralSurface(hashKey(moon.key), moon.craters),
         tint: moon.color,
+        wrap: moon.atmosphere?.wrap ?? 0,
+        limb: moon.limb ?? 0,
     }), [moon]);
     useEffect(() => () => { material.uniforms.uMap.value.dispose(); material.dispose(); }, [material]);
     return <primitive object={material} attach="material" />;

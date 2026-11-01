@@ -35,8 +35,11 @@ export default function Planet({ planet }) {
     const material = useMemo(() => createBodyMaterial({
         map: textures[showSurface ? planet.surfaceTexture : planet.texture],
         night: planet.nightTexture ? textures[planet.nightTexture] : null,
+        // The radar map of Venus is the bare ground: no cloud-deck shading.
+        wrap: showSurface ? 0 : planet.atmosphere?.wrap ?? 0,
+        limb: showSurface ? 0 : planet.limb ?? 0,
     }), [textures, planet, showSurface]);
-    const cloudMaterial = useMemo(() => planet.cloudTexture && createBodyMaterial({ map: textures[planet.cloudTexture], clouds: true }), [textures, planet]);
+    const cloudMaterial = useMemo(() => planet.cloudTexture && createBodyMaterial({ map: textures[planet.cloudTexture], clouds: true, wrap: planet.atmosphere?.wrap ?? 0 }), [textures, planet]);
 
     useEffect(() => () => material.dispose(), [material]);
     useEffect(() => () => cloudMaterial?.dispose(), [cloudMaterial]);

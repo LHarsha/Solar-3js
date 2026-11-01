@@ -16,7 +16,7 @@ export function prepareTexture(texture) {
  * Surface material lit by the Sun at the origin. Used for planets, moons and Earth's clouds.
  * A little ambient light keeps night sides readable; Earth stays darker so its city lights show.
  */
-export function createBodyMaterial({ map, night = null, tint = '#ffffff', ambient = night ? 0.02 : 0.07, clouds = false }) {
+export function createBodyMaterial({ map, night = null, tint = '#ffffff', ambient = night ? 0.015 : 0.045, clouds = false, wrap = 0, limb = 0 }) {
     return new THREE.ShaderMaterial({
         vertexShader: bodyVertex,
         fragmentShader: bodyFragment,
@@ -27,6 +27,8 @@ export function createBodyMaterial({ map, night = null, tint = '#ffffff', ambien
             uTint: { value: new THREE.Color(tint) },
             uAlphaFromLuma: { value: clouds ? 1 : 0 },
             uAmbient: { value: ambient },
+            uWrap: { value: wrap },
+            uLimb: { value: limb },
         },
         transparent: clouds,
         depthWrite: !clouds,

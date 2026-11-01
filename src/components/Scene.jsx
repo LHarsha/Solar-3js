@@ -1,6 +1,5 @@
 import { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import StarField from './StarField';
 import Sun from './Sun';
@@ -20,7 +19,7 @@ export default function Scene() {
                 alpha: false,
                 toneMapping: THREE.ACESFilmicToneMapping,
             }}
-            dpr={[1, 1.5]}
+            dpr={[1, 2]}
             performance={{ min: 0.65 }}
             style={{ position: 'absolute', top: 0, left: 0 }}
         >
@@ -41,15 +40,6 @@ export default function Scene() {
                     </group>
                 ))}
             </Suspense>
-
-            <EffectComposer>
-                <Bloom
-                    intensity={0.6}
-                    luminanceThreshold={0.95}
-                    luminanceSmoothing={0.2}
-                    mipmapBlur
-                />
-            </EffectComposer>
         </Canvas>
     );
 }

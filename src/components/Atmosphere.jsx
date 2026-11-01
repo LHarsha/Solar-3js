@@ -21,7 +21,7 @@ export default function Atmosphere({ radius, color, strength = 1 }) {
 
     return (
         <mesh scale={1.06} material={material} raycast={() => null}>
-            <sphereGeometry args={[radius, 64, 48]} />
+            <sphereGeometry args={[radius, 48, 32]} />
         </mesh>
     );
 }

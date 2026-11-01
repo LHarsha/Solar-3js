@@ -12,13 +12,14 @@ An interactive 3D model of the Solar System you can travel through. The planets 
 - **Places to visit.** Choose a landmark and the camera settles above that latitude and longitude, then turns with the ground beneath it.
 - **Fact sheets.** Each body has NASA physical data, plus live distance from Earth and light travel time for the simulated date.
 - **Venus.** Switch between its cloud tops and the radar map of its surface.
+- **Sky.** The Milky Way sits where it really is, converted from galactic to scene coordinates. Stars are rendered as sharp points, and the Sun has limb darkening. There is no full-screen post-processing, so it stays smooth on integrated graphics.
 - **Accessibility.** Keyboard shortcuts (`1`–`8` planets, `0` Sun, `Esc` overview, `Space` pause). The layout works on phones, and the HUD still works without WebGL.
 
 Sizes and distances are compressed so everything fits on screen. Directions, orbital shapes and timing are real.
 
 ## Stack
 
-React 19 · Vite · three.js via `@react-three/fiber` / `drei` / `postprocessing` · custom GLSL · Zustand · Framer Motion · Tailwind
+React 19 · Vite · three.js via `@react-three/fiber` / `drei` · custom GLSL · Zustand · Framer Motion · Tailwind
 
 ## Credits
 
