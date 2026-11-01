@@ -1,6 +1,27 @@
+import { Fragment } from 'react';
 import useViewStore from '../store/viewStore';
 import { PLANETS } from '../utils/solarSystem';
 import { getBody, getMoonsOf } from '../utils/bodies';
+
+function NavItem({ index, selected, open = false, onClick, children, moon = false }) {
+    return (
+        <li>
+            <button type="button" onClick={onClick} className={`body-nav__item${moon ? ' body-nav__item--moon' : ''}${selected ? ' is-selected' : ''}${open ? ' is-open' : ''}`} aria-current={selected ? 'true' : undefined} aria-keyshortcuts={index}>
+                <span className="body-nav__key" aria-hidden="true">{index}</span>
+                {children}
+            </button>
+        </li>
+    );
+}
+
+function Toggle({ on, onChange, children }) {
+    return (
+        <button type="button" className="toggle" aria-pressed={on} onClick={() => onChange(!on)}>
+            <span className="toggle__box" aria-hidden="true" />
+            {children}
+        </button>
+    );
+}
 
 export default function Hud() {
     const focusKey = useViewStore((s) => s.focusKey);
@@ -18,30 +39,27 @@ export default function Hud() {
         <header className="hud">
             <div className="hud__title">
                 <h1>Solar System</h1>
-                <p>Positions for the current date · <button type="button" onClick={() => setAboutOpen(true)}>About</button></p>
+                <button type="button" onClick={() => setAboutOpen(true)}>About</button>
             </div>
 
-            <nav className="body-nav" aria-label="Bodies">
-                <button type="button" onClick={() => focus(null)} className={!focusKey ? 'is-selected' : ''}>Overview</button>
-                <button type="button" onClick={() => focus('sun')} className={focusKey === 'sun' ? 'is-selected' : ''}>Sun</button>
-                {PLANETS.map((planet, index) => (
-                    <button key={planet.key} type="button" onClick={() => focus(planet.key)} className={systemKey === planet.key ? 'is-selected' : ''} aria-keyshortcuts={String(index + 1)}>
-                        {planet.name}
-                    </button>
-                ))}
+            <nav aria-label="Bodies">
+                <ul className="body-nav">
+                    <NavItem index="Esc" selected={!focusKey} onClick={() => focus(null)}>Overview</NavItem>
+                    <NavItem index="0" selected={focusKey === 'sun'} onClick={() => focus('sun')}>Sun</NavItem>
+                    {PLANETS.map((planet, index) => (
+                        <Fragment key={planet.key}>
+                            <NavItem index={String(index + 1)} selected={focusKey === planet.key} open={systemKey === planet.key} onClick={() => focus(planet.key)}>{planet.name}</NavItem>
+                            {systemKey === planet.key && moons.map((moon) => (
+                                <NavItem key={moon.key} moon selected={focusKey === moon.key} onClick={() => focus(moon.key)}>{moon.name}</NavItem>
+                            ))}
+                        </Fragment>
+                    ))}
+                </ul>
             </nav>
 
-            {moons.length > 0 && (
-                <nav className="body-nav body-nav--moons" aria-label="Moons">
-                    {moons.map((moon) => (
-                        <button key={moon.key} type="button" onClick={() => focus(moon.key)} className={focusKey === moon.key ? 'is-selected' : ''}>{moon.name}</button>
-                    ))}
-                </nav>
-            )}
-
             <div className="hud__toggles">
-                <label><input type="checkbox" checked={showLabels} onChange={(event) => setShowLabels(event.target.checked)} /> Labels</label>
-                <label><input type="checkbox" checked={showOrbits} onChange={(event) => setShowOrbits(event.target.checked)} /> Orbits</label>
+                <Toggle on={showLabels} onChange={setShowLabels}>Labels</Toggle>
+                <Toggle on={showOrbits} onChange={setShowOrbits}>Orbits</Toggle>
             </div>
         </header>
     );

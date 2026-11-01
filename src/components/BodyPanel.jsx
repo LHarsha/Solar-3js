@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import useViewStore from '../store/viewStore';
 import { getBody } from '../utils/bodies';
-import { getPlanet } from '../utils/solarSystem';
+import { PLANETS, getPlanet } from '../utils/solarSystem';
 import { AU_KM, heliocentricPosition } from '../utils/orbitMath';
 import { useSimTime } from '../utils/useSimTime';
 
@@ -18,10 +18,14 @@ const FACT_LABELS = [
     ['atmosphere', 'Atmosphere'],
 ];
 
+const ORDINALS = ['', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
+
 const numberFormat = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0 });
 
+const dateFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
 function formatDistance(km) {
-    if (km >= 1e6) return `${(km / 1e6).toFixed(km >= 1e8 ? 0 : 1)} million km`;
+    if (km >= 1e6) return `${numberFormat.format(Math.round(km / 1e6))}M km`;
     return `${numberFormat.format(km)} km`;
 }
 
@@ -43,18 +47,22 @@ function LiveDistances({ body }) {
     const fromEarthKm = body.key === 'moon' ? 384400 : (position ? position.distanceTo(earth) : earth.length()) * AU_KM;
     const isEarth = body.key === 'earth';
 
+    const stats = [
+        fromSunAu !== null && !body.parent && { label: 'From the Sun', value: `${fromSunAu.toFixed(3)} AU` },
+        !isEarth && { label: 'From Earth', value: `${body.key === 'moon' ? '~' : ''}${formatDistance(fromEarthKm)}` },
+        !isEarth && { label: 'Light time', value: formatLightTime(fromEarthKm) },
+    ].filter(Boolean);
+    if (stats.length === 0) return null;
+
     return (
-        <dl className="fact-grid fact-grid--live">
-            {fromSunAu !== null && !body.parent && (
-                <div><dt>From the Sun</dt><dd>{fromSunAu.toFixed(3)} AU</dd></div>
-            )}
-            {!isEarth && (
-                <>
-                    <div><dt>From Earth</dt><dd>{body.key === 'moon' ? '~' : ''}{formatDistance(fromEarthKm)}</dd></div>
-                    <div><dt>Light time</dt><dd>{formatLightTime(fromEarthKm)}</dd></div>
-                </>
-            )}
-        </dl>
+        <section className="panel-section">
+            <h3>Now <span>{dateFormat.format(time)}</span></h3>
+            <dl className="live-stats">
+                {stats.map(({ label, value }) => (
+                    <div key={label}><dd>{value}</dd><dt>{label}</dt></div>
+                ))}
+            </dl>
+        </section>
     );
 }
 
@@ -67,7 +75,8 @@ export default function BodyPanel() {
     const setVenusSurface = useViewStore((s) => s.setVenusSurface);
     const body = getBody(focusKey);
     const parent = body?.parent ? getBody(body.parent) : null;
-    const kind = body?.key === 'sun' ? 'Star' : parent ? `Moon of ${parent.name}` : 'Planet';
+    const order = PLANETS.findIndex((planet) => planet.key === body?.key) + 1;
+    const kind = body?.key === 'sun' ? 'Star · Type G2V' : parent ? `Moon of ${parent.name}` : `Planet · ${ORDINALS[order]} from the Sun`;
     const facts = body?.facts ?? {};
 
     return (
@@ -75,22 +84,21 @@ export default function BodyPanel() {
             {body && (
                 <motion.aside
                     key="panel"
-                    initial={{ x: 24, opacity: 0 }}
+                    initial={{ x: 16, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
-                    exit={{ x: 24, opacity: 0 }}
+                    exit={{ x: 16, opacity: 0 }}
                     transition={{ duration: 0.25, ease: 'easeOut' }}
                     className="body-panel"
                     aria-label={`${body.name} details`}
                 >
                     <div className="body-panel__scroll">
                         <div className="body-panel__head">
-                            <div>
-                                <p className="body-panel__kind">{kind}</p>
-                                <h2>{body.name}</h2>
-                            </div>
-                            <button type="button" className="body-panel__close" onClick={() => focus(null)} aria-label="Back to overview">×</button>
+                            <p className="body-panel__kind">{kind}</p>
+                            <button type="button" className="body-panel__close" onClick={() => focus(null)} aria-label="Back to overview">
+                                <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.3" /></svg>
+                            </button>
                         </div>
-
+                        <h2>{body.name}</h2>
                         <p className="body-panel__description">{body.description}</p>
 
                         {body.surfaceTexture && (
@@ -102,32 +110,36 @@ export default function BodyPanel() {
 
                         <LiveDistances body={body} />
 
-                        <dl className="fact-grid">
-                            {FACT_LABELS.filter(([key]) => facts[key]).map(([key, label]) => (
-                                <div key={key}><dt>{label}</dt><dd>{facts[key]}</dd></div>
-                            ))}
-                            {body.axialTilt !== undefined && <div><dt>Axial tilt</dt><dd>{body.displayTilt ?? `${body.axialTilt}°`}</dd></div>}
-                        </dl>
+                        <section className="panel-section">
+                            <h3>Physical data</h3>
+                            <dl className="fact-list">
+                                {FACT_LABELS.filter(([key]) => facts[key]).map(([key, label]) => (
+                                    <div key={key}><dt>{label}</dt><dd>{facts[key]}</dd></div>
+                                ))}
+                                {body.axialTilt !== undefined && <div><dt>Axial tilt</dt><dd>{body.displayTilt ?? `${body.axialTilt}°`}</dd></div>}
+                            </dl>
+                        </section>
 
                         {body.landmarks?.length > 0 && (
-                            <section className="places">
+                            <section className="panel-section places">
                                 <h3>Places to visit</h3>
-                                <ul>
-                                    {body.landmarks.map((landmark) => (
+                                <ol>
+                                    {body.landmarks.map((landmark, index) => (
                                         <li key={landmark.id}>
-                                            <button type="button" className={landmarkId === landmark.id ? 'is-selected' : ''} onClick={() => visitLandmark(body.key, landmark.id)}>
+                                            <button type="button" className={landmarkId === landmark.id ? 'is-selected' : ''} aria-pressed={landmarkId === landmark.id} onClick={() => visitLandmark(body.key, landmark.id)}>
+                                                <span className="places__index">{String(index + 1).padStart(2, '0')}</span>
                                                 <span className="places__name">{landmark.name}</span>
                                                 <span className="places__coords">{formatCoordinate(landmark.lat, 'N', 'S')} {formatCoordinate(landmark.lon, 'E', 'W')}</span>
                                                 <span className="places__note">{landmark.note}</span>
                                             </button>
                                         </li>
                                     ))}
-                                </ul>
+                                </ol>
                             </section>
                         )}
 
                         {parent && (
-                            <button type="button" className="body-panel__parent" onClick={() => focus(parent.key)}>Back to {parent.name}</button>
+                            <button type="button" className="body-panel__parent" onClick={() => focus(parent.key)}>← Back to {parent.name}</button>
                         )}
                     </div>
                 </motion.aside>

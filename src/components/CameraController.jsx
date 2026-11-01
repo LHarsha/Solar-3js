@@ -10,7 +10,7 @@ import { surfaceDirection } from '../utils/orbitMath';
 const OVERVIEW_OFFSET = new THREE.Vector3(0, 46, 70);
 const OVERVIEW_MIN = 8;
 const MAX_DISTANCE = 600;
-const PANEL_WIDTH_PX = 400; // keep in sync with the .body-panel width
+const PANEL_WIDTH_PX = 380; // keep in sync with the .body-panel width
 const UP = new THREE.Vector3(0, 1, 0);
 
 const bodyPosition = new THREE.Vector3();

@@ -55,7 +55,7 @@ export default function App() {
       <Loader
         containerStyles={{ background: '#000' }}
         barStyles={{ background: '#c9d4e3', height: 2 }}
-        dataStyles={{ color: '#8b97a8', fontSize: '0.75rem', fontFamily: 'Inter, sans-serif' }}
+        dataStyles={{ color: '#8b97a8', fontSize: '0.75rem', fontFamily: "'IBM Plex Mono', monospace" }}
         dataInterpolation={(p) => `Loading textures… ${p.toFixed(0)}%`}
       />
     </div>
